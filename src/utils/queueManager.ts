@@ -26,23 +26,17 @@ function initializeQueue(guildId: string): Queue {
 
         if (newState.status === AudioPlayerStatus.Playing) {
             queue.playing = true;
-            queue.isBuffering = false;  // Reset buffering state when playback starts
-            logger.info(`Audio player started playing in guild ${guildId}`);
+            queue.isBuffering = false;
         } else if (newState.status === AudioPlayerStatus.Idle) {
-            if (queue.isBuffering) {
-                logger.info(`Buffering state active in guild ${guildId}, not skipping song`);
-                queue.isBuffering = false;  // Reset buffering after one Idle state
+            if (queue.songs.length > 0) {
+                setTimeout(() => playNextSong(guildId), 500); // Allow a slight delay for smooth transitions
             } else {
-                // Set buffering to true initially to prevent immediate skip
-                queue.isBuffering = true;
-                setTimeout(() => {
-                    if (queue.isBuffering) {
-                        queue.isBuffering = false;
-                        playNextSong(guildId).catch((error) =>
-                            logger.error(`Failed to start next song in guild ${guildId}: ${error.message}`)
-                        );
-                    }
-                }, 2000);  // Buffering delay to handle momentary stream interruptions
+                queue.playing = false;
+                if (queue.connection) {
+                    queue.connection.destroy();
+                    queue.connection = null;
+                }
+                logger.info(`Playback stopped as queue is empty in guild ${guildId}`);
             }
         }
     });
@@ -79,8 +73,15 @@ async function playNextSong(guildId: string): Promise<void> {
         logger.info(`Queue is empty in guild ${guildId}. Playback stopped.`);
         return;
     }
-    const nextSong = queue.songs.shift()!;
+
+    const nextSong = queue.songs.shift();
+    if (!nextSong) {
+        logger.error(`No song found in queue for guild ${guildId}`);
+        return;
+    }
+
     try {
+        queue.playing = true; // Set playing to true before starting
         queue.player.play(nextSong.resource);
         logger.info(`Now playing "${nextSong.title}" in guild ${guildId}`);
     } catch (error: any) {

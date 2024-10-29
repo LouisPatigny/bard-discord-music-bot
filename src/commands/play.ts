@@ -30,7 +30,7 @@ ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
 ffmpeg.setFfprobePath('C:/ffmpeg/bin/ffprobe.exe');
 
 const TMP_PATH = path.join(__dirname, '..', 'tmp');
-const TMP_FORMAT = `output_${Date.now()}`;
+const TMP_FORMAT = `output_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 const PREFIX = "**";
 const SONG_ADDED = " has been added to the queue!";
 const FETCH_FAIL_MSG = "Failed to retrieve video information.";
@@ -125,7 +125,7 @@ async function handleAudioResource(url: string, songInfo: any, interaction: Chat
             return;
         }
 
-        const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 64 * 1024 }); // Increased buffer size
+        const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 128 * 1024 }); // Increased buffer size
         audioStream.on('error', (error) => {
             logger.error('Error creating audio stream:', error);
         });
@@ -193,7 +193,7 @@ async function downloadAndConvert(videoUrl: string): Promise<string> {
             });
             await new Promise<void>((resolve, reject) => {
                 ffmpeg(m4aFilePath)
-                    .audioBitrate(128)
+                    .audioBitrate(96)
                     .toFormat('mp3')
                     .on('end', () => resolve())
                     .on('error', (error) => reject(error))
