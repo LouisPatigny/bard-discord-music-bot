@@ -30,7 +30,7 @@ const client = initializeClient();
 client.commands = new Collection<string, Command>();
 
 const rest = new REST({ version: '10' }).setToken(config.token);
-const commandFiles = fs.readdirSync(COMMANDS_PATH).filter((file) => file.endsWith('.ts'));
+const commandFiles = fs.readdirSync(COMMANDS_PATH).filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 
 // Initialize Client
 function initializeClient(): ExtendedClient {

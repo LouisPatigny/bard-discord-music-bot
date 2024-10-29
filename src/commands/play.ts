@@ -25,6 +25,10 @@ import {
     fetchVideoInfo,
 } from '../utils/youtubeUtils';
 
+// Set paths for ffmpeg and ffprobe
+ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
+ffmpeg.setFfprobePath('C:/ffmpeg/bin/ffprobe.exe');
+
 const TMP_PATH = path.join(__dirname, '..', 'tmp');
 const TMP_FORMAT = `output_${Date.now()}`;
 const PREFIX = "**";
@@ -50,18 +54,18 @@ const command: Command = {
         const url = interaction.options.getString('url', true);
         const member = interaction.member as GuildMember;
 
-        if (!isUserInVoiceChannel(member, interaction)) return;
-        if (!userHasPermissions(member, interaction)) return;
+        if (!await isUserInVoiceChannel(member, interaction)) return;
+        if (!await userHasPermissions(member, interaction)) return;
 
         await interaction.deferReply();
         if (!isValidYouTubeUrl(url)) {
-            await interaction.followUp({ content: VALID_URL_MSG, ephemeral: true });
+            await interaction.editReply({ content: VALID_URL_MSG });
             return;
         }
 
         const videoId = extractVideoId(url);
         if (!videoId) {
-            await interaction.followUp({ content: INVALID_URL_MSG, ephemeral: true });
+            await interaction.editReply({ content: INVALID_URL_MSG });
             return;
         }
 
@@ -114,9 +118,25 @@ async function getSongInfo(videoId: string, interaction: ChatInputCommandInterac
 async function handleAudioResource(url: string, songInfo: any, interaction: ChatInputCommandInteraction, member: GuildMember) {
     try {
         const mp3FilePath = await downloadAndConvert(url);
-        const audioStream = fs.createReadStream(mp3FilePath);
+
+        if (!fs.existsSync(mp3FilePath)) {
+            logger.error('MP3 file does not exist:', mp3FilePath);
+            await interaction.followUp({ content: "There was an error with the audio file.", ephemeral: true });
+            return;
+        }
+
+        const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 64 * 1024 }); // Increased buffer size
+        audioStream.on('error', (error) => {
+            logger.error('Error creating audio stream:', error);
+        });
+
+        // Log stream events for troubleshooting
+        audioStream.on('end', () => logger.info(`Audio stream ended for ${songInfo.title}`));
+        audioStream.on('close', () => logger.info(`Audio stream closed for ${songInfo.title}`));
+
         const resource = createAudioResource(audioStream, {
             inputType: StreamType.Arbitrary,
+            inlineVolume: true, // Enables inline volume for stability
             metadata: { title: songInfo.title },
         });
 
@@ -183,9 +203,7 @@ async function downloadAndConvert(videoUrl: string): Promise<string> {
             return mp3FilePath;
         } catch (error: any) {
             logger.warn(
-                `Retrying download and convert due to error: ${error.message} (Attempt ${
-                    attempt + 1
-                })`
+                `Retrying download and convert due to error: ${error.message} (Attempt ${attempt + 1})`
             );
             if (attempt >= config.MAX_RETRIES - 1) throw error;
             await new Promise((res) => setTimeout(res, 1000));

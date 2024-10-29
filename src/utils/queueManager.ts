@@ -18,19 +18,32 @@ function initializeQueue(guildId: string): Queue {
         player,
         songs: [],
         playing: false,
+        isBuffering: false, // New flag for buffering state
     };
 
-    player.on('stateChange', (oldState, newState) => {
+    player.on('stateChange', (_, newState) => {
+        logger.info(`Player status changed to: ${newState.status} in guild ${guildId}`);
+
         if (newState.status === AudioPlayerStatus.Playing) {
             queue.playing = true;
+            queue.isBuffering = false;  // Reset buffering state when playback starts
             logger.info(`Audio player started playing in guild ${guildId}`);
         } else if (newState.status === AudioPlayerStatus.Idle) {
-            logger.info(`Audio player is idle in guild ${guildId}`);
-            playNextSong(guildId).catch((error) =>
-                logger.error(
-                    `Failed to start next song in guild ${guildId}: ${error.message}`
-                )
-            );
+            if (queue.isBuffering) {
+                logger.info(`Buffering state active in guild ${guildId}, not skipping song`);
+                queue.isBuffering = false;  // Reset buffering after one Idle state
+            } else {
+                // Set buffering to true initially to prevent immediate skip
+                queue.isBuffering = true;
+                setTimeout(() => {
+                    if (queue.isBuffering) {
+                        queue.isBuffering = false;
+                        playNextSong(guildId).catch((error) =>
+                            logger.error(`Failed to start next song in guild ${guildId}: ${error.message}`)
+                        );
+                    }
+                }, 2000);  // Buffering delay to handle momentary stream interruptions
+            }
         }
     });
 

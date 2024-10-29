@@ -1,4 +1,3 @@
-// src/commands/queue.ts
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import queueManager from '../utils/queueManager';
 import logger from '../utils/logger';
@@ -17,6 +16,9 @@ const command: Command = {
             return;
         }
 
+        // Debug: Log the current queue status
+        logger.info(`Fetching queue for guildId: ${guildId}`);
+
         const queue = queueManager.getQueue(guildId);
 
         if (!queue || queue.songs.length === 0) {
@@ -24,6 +26,7 @@ const command: Command = {
                 content: 'The queue is currently empty!',
                 ephemeral: true,
             });
+            logger.info(`Queue is empty for ${guildId}`);
             return;
         }
 
@@ -46,7 +49,7 @@ const command: Command = {
         }
 
         await interaction.reply({ content: response });
-        logger.info(`Displayed queue for ${interaction.user.tag}`);
+        logger.info(`Displayed queue for ${interaction.user.tag} in guildId: ${guildId}`);
     },
 };
 

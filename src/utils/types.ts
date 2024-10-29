@@ -22,4 +22,5 @@ export interface Queue {
     player: AudioPlayer;
     songs: QueueItem[];
     playing: boolean;
+    isBuffering: boolean;
 }
