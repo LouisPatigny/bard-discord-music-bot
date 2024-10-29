@@ -1,27 +1,32 @@
 // src/utils/cacheManager.ts
-
-interface CacheEntry {
-    data: any;
+interface CacheEntry<T> {
+    data: T;
     expiration: number;
 }
 
-const cache = new Map<string, CacheEntry>();
+class CacheManager<T> {
+    private cache = new Map<string, CacheEntry<T>>();
 
-function set(videoId: string, data: any, ttl: number = 600000): void {
-    const expiration = Date.now() + ttl;
-    cache.set(videoId, { data, expiration });
-}
-
-function get(videoId: string): any | null {
-    const cached = cache.get(videoId);
-    if (!cached) return null;
-
-    if (Date.now() > cached.expiration) {
-        cache.delete(videoId);
-        return null;
+    set(key: string, data: T, ttl: number = 600000): void {
+        const expiration = Date.now() + ttl;
+        this.cache.set(key, { data, expiration });
     }
 
-    return cached.data;
+    get(key: string): T | null {
+        const cached = this.cache.get(key);
+        if (!cached) return null;
+
+        if (Date.now() > cached.expiration) {
+            this.cache.delete(key);
+            return null;
+        }
+
+        return cached.data;
+    }
+
+    delete(key: string): void {
+        this.cache.delete(key);
+    }
 }
 
-export { set, get };
+export default new CacheManager<any>();

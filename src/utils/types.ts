@@ -1,6 +1,6 @@
 // src/utils/types.ts
-import {ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
-import {AudioResource} from "@discordjs/voice";
+import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { AudioResource, VoiceConnection, AudioPlayer } from '@discordjs/voice';
 
 // Interface for a Command
 export interface Command {
@@ -8,9 +8,18 @@ export interface Command {
     execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
-// Queue Interface
+// Interface for a song in the queue
 export interface QueueItem {
     title: string;
     url: string;
     resource: AudioResource;
+}
+
+// Interface for the queue
+export interface Queue {
+    guildId: string;
+    connection: VoiceConnection | null;
+    player: AudioPlayer;
+    songs: QueueItem[];
+    playing: boolean;
 }

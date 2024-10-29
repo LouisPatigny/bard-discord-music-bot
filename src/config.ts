@@ -3,17 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-interface Config {
-    token: string;
-    clientId: string;
-    guildId: string;
-    MAX_RETRIES: number;
+const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID, YOUTUBE_API_KEY } = process.env;
+
+if (!DISCORD_TOKEN || !CLIENT_ID || !GUILD_ID || !YOUTUBE_API_KEY) {
+    throw new Error('Missing required environment variables.');
 }
 
-const config: Config = {
-    token: process.env.DISCORD_TOKEN || '',
-    clientId: process.env.CLIENT_ID || '',
-    guildId: process.env.GUILD_ID || '',
+const config = {
+    token: DISCORD_TOKEN,
+    clientId: CLIENT_ID,
+    guildId: GUILD_ID,
+    youtubeApiKey: YOUTUBE_API_KEY,
     MAX_RETRIES: 10,
 };
 

@@ -1,22 +1,24 @@
 // src/utils/queueManager.ts
-import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, VoiceConnection } from '@discordjs/voice';
-import config from '../config';
+import {
+    AudioPlayer,
+    AudioPlayerStatus,
+    createAudioPlayer,
+    VoiceConnection,
+} from '@discordjs/voice';
 import logger from './logger';
-import { QueueItem } from './types';
-
-interface Queue {
-    guildId: string;
-    connection: VoiceConnection | null;
-    player: AudioPlayer;
-    songs: QueueItem[];
-    playing: boolean;
-}
+import { QueueItem, Queue } from './types';
 
 const queues = new Map<string, Queue>();
 
 function initializeQueue(guildId: string): Queue {
     const player = createAudioPlayer();
-    const queue: Queue = { guildId, connection: null, player, songs: [], playing: false };
+    const queue: Queue = {
+        guildId,
+        connection: null,
+        player,
+        songs: [],
+        playing: false,
+    };
 
     player.on('stateChange', (oldState, newState) => {
         if (newState.status === AudioPlayerStatus.Playing) {
@@ -24,17 +26,19 @@ function initializeQueue(guildId: string): Queue {
             logger.info(`Audio player started playing in guild ${guildId}`);
         } else if (newState.status === AudioPlayerStatus.Idle) {
             logger.info(`Audio player is idle in guild ${guildId}`);
-            playNextSong(guildId)
-                .then(() => logger.info(`Next song started playing in guild ${guildId}`))
-                .catch(error => logger.error(`Failed to start next song in guild ${guildId}: ${error.message}`));
+            playNextSong(guildId).catch((error) =>
+                logger.error(
+                    `Failed to start next song in guild ${guildId}: ${error.message}`
+                )
+            );
         }
     });
 
     player.on('error', (error) => {
         logger.error(`Audio player error in guild ${guildId}: ${error.message}`, error);
-        handlePlayerError(error, guildId)
-            .then(() => logger.info(`Error handled in guild ${guildId}`))
-            .catch(err => logger.error(`Failed to handle error in guild ${guildId}: ${err.message}`, err));
+        handlePlayerError(error, guildId).catch((err) =>
+            logger.error(`Failed to handle error in guild ${guildId}: ${err.message}`, err)
+        );
     });
 
     queues.set(guildId, queue);
@@ -42,13 +46,7 @@ function initializeQueue(guildId: string): Queue {
 }
 
 function getQueue(guildId: string): Queue {
-    let queue = queues.get(guildId);
-
-    if (!queue) {
-        queue = initializeQueue(guildId);
-    }
-
-    return queue;
+    return queues.get(guildId) || initializeQueue(guildId);
 }
 
 function addSong(guildId: string, song: QueueItem): void {
@@ -94,6 +92,9 @@ async function handlePlayerError(error: Error, guildId: string): Promise<void> {
     await playNextSong(guildId);
 }
 
-const queueManager = { getQueue, addSong, playNextSong, resetQueue };
-
-export default queueManager;
+export default {
+    getQueue,
+    addSong,
+    playNextSong,
+    resetQueue,
+};

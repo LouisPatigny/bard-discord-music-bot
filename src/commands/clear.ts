@@ -20,7 +20,10 @@ const command: Command = {
         const queue = queueManager.getQueue(guildId);
 
         if (!queue || queue.songs.length === 0) {
-            await interaction.reply({ content: 'The queue is already empty!', ephemeral: true });
+            await interaction.reply({
+                content: 'The queue is already empty!',
+                ephemeral: true,
+            });
             return;
         }
 
