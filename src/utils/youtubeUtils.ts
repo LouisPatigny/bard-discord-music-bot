@@ -20,15 +20,35 @@ export const isValidYouTubeUrl = (url: string): boolean => {
 
 export const fetchVideoInfo = async (videoId: string) => {
     const response = await youtube.videos.list({
-        part: ['snippet'],
+        part: ['snippet', 'status'],
         id: [videoId],
     });
 
     const items = response.data.items;
     if (!items || items.length === 0) return null;
 
+    const video = items[0];
+    if (video.status?.privacyStatus !== 'public') {
+        return null; // Video is not publicly available
+    }
+
     return {
-        title: items[0].snippet!.title!,
+        title: video.snippet!.title!,
         video_url: `https://www.youtube.com/watch?v=${videoId}`,
     };
+};
+
+export const searchYouTube = async (query: string): Promise<string | null> => {
+    const response = await youtube.search.list({
+        part: ['id'],
+        q: query,
+        maxResults: 1,
+        type: ['video'],
+    });
+
+    const items = response.data.items;
+    if (!items || items.length === 0) return null;
+
+    const videoId = items[0].id?.videoId;
+    return videoId || null;
 };

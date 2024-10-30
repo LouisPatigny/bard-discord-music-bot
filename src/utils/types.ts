@@ -24,4 +24,5 @@ export interface Queue {
     currentSong: QueueItem | null;
     playing: boolean;
     isBuffering: boolean;
+    leaveTimeout: NodeJS.Timeout | null;
 }

@@ -22,7 +22,7 @@ import queueManager from '../utils/queueManager';
 import {
     extractVideoId,
     isValidYouTubeUrl,
-    fetchVideoInfo,
+    fetchVideoInfo, searchYouTube,
 } from '../utils/youtubeUtils';
 
 // Set paths for ffmpeg and ffprobe
@@ -35,7 +35,6 @@ const SONG_ADDED = " has been added to the queue!";
 const FETCH_FAIL_MSG = "Failed to retrieve video information.";
 const VOICE_CHANNEL_ERROR_MSG = "You need to be in a voice channel to play music!";
 const INVALID_URL_MSG = "Invalid YouTube URL.";
-const VALID_URL_MSG = "Please provide a valid YouTube URL.";
 const RATE_LIMIT_MSG = "Failed to retrieve video information. Rate limits may apply.";
 const AUDIO_STREAM_ERROR_MSG = "There was an error creating the audio stream.";
 
@@ -45,34 +44,42 @@ const command: Command = {
         .setDescription('Plays a song from YouTube')
         .addStringOption((option) =>
             option
-                .setName('url')
-                .setDescription('The URL of the YouTube video')
+                .setName('input')
+                .setDescription('The YouTube URL or search query')
                 .setRequired(true)
         ) as SlashCommandBuilder,
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-        const url = interaction.options.getString('url', true);
+        const input = interaction.options.getString('input', true);
         const member = interaction.member as GuildMember;
 
-        if (!await isUserInVoiceChannel(member, interaction)) return;
-        if (!await userHasPermissions(member, interaction)) return;
+        if (!(await isUserInVoiceChannel(member, interaction))) return;
+        if (!(await userHasPermissions(member, interaction))) return;
 
         await interaction.deferReply();
-        if (!isValidYouTubeUrl(url)) {
-            await interaction.editReply({ content: VALID_URL_MSG });
-            return;
+
+        let videoId: string | null = null;
+        let songInfo: any = null;
+
+        if (isValidYouTubeUrl(input)) {
+            videoId = extractVideoId(input);
+            if (!videoId) {
+                await interaction.editReply({ content: INVALID_URL_MSG });
+                return;
+            }
+        } else {
+            // Perform a search
+            videoId = await searchYouTube(input);
+            if (!videoId) {
+                await interaction.editReply({ content: `No results found for "${input}".` });
+                return;
+            }
         }
 
-        const videoId = extractVideoId(url);
-        if (!videoId) {
-            await interaction.editReply({ content: INVALID_URL_MSG });
-            return;
-        }
-
-        const songInfo = await getSongInfo(videoId, interaction);
+        songInfo = await getSongInfo(videoId, interaction);
         if (!songInfo) return;
 
-        await handleAudioResource(url, songInfo, interaction, member);
-    }
+        await handleAudioResource(songInfo.video_url, songInfo, interaction, member);
+    },
 };
 
 async function isUserInVoiceChannel(member: GuildMember, interaction: ChatInputCommandInteraction): Promise<boolean> {
@@ -198,7 +205,7 @@ async function downloadAndConvert(videoUrl: string): Promise<string> {
 
     for (let attempt = 0; attempt < config.MAX_RETRIES; attempt++) {
         try {
-            const downloadResult = await youtubedl(videoUrl, {
+            await youtubedl(videoUrl, {
                 extractAudio: true,
                 format: 'bestaudio[ext=m4a]',
                 audioFormat: 'm4a',

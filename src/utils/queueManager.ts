@@ -20,6 +20,7 @@ function initializeQueue(guildId: string): Queue {
         currentSong: null,
         playing: false,
         isBuffering: false,
+        leaveTimeout: null,
     };
 
     player.on('stateChange', (_, newState) => {
@@ -33,12 +34,19 @@ function initializeQueue(guildId: string): Queue {
                 setTimeout(() => playNextSong(guildId), 500); // Allow a slight delay for smooth transitions
             } else {
                 queue.playing = false;
-                queue.currentSong = null; // Reset currentSong
-                if (queue.connection) {
-                    queue.connection.destroy();
-                    queue.connection = null;
+                queue.currentSong = null;
+                // Start the leave timeout
+                if (!queue.leaveTimeout) {
+                    queue.leaveTimeout = setTimeout(() => {
+                        if (queue.connection) {
+                            queue.connection.destroy();
+                            queue.connection = null;
+                        }
+                        queues.delete(guildId); // Remove the queue from the map
+                        logger.info(`Left the voice channel due to inactivity in guild ${guildId}`);
+                    }, 300000); // 5 minutes in milliseconds
+                    logger.info(`Started leave timeout in guild ${guildId}`);
                 }
-                logger.info(`Playback stopped as queue is empty in guild ${guildId}`);
             }
         }
     });
@@ -61,19 +69,24 @@ function getQueue(guildId: string): Queue {
 function addSong(guildId: string, song: QueueItem): void {
     const queue = getQueue(guildId);
     queue.songs.push(song);
+
+    // Clear the leave timeout if it exists
+    if (queue.leaveTimeout) {
+        clearTimeout(queue.leaveTimeout);
+        queue.leaveTimeout = null;
+        logger.info(`Cleared leave timeout in guild ${guildId}`);
+    }
+
     logger.info(`Added song "${song.title}" to the queue in guild ${guildId}`);
 }
 
 async function playNextSong(guildId: string): Promise<void> {
     const queue = getQueue(guildId);
+
     if (queue.songs.length === 0) {
-        queue.playing = false;
-        queue.currentSong = null; // Reset currentSong when the queue is empty
-        if (queue.connection) {
-            queue.connection.destroy();
-            queue.connection = null;
-        }
-        logger.info(`Queue is empty in guild ${guildId}. Playback stopped.`);
+        queue.currentSong = null;
+        // Removed the duplicated code for starting the leave timeout
+        logger.info(`Queue is empty in guild ${guildId}. No more songs to play.`);
         return;
     }
 
@@ -83,7 +96,7 @@ async function playNextSong(guildId: string): Promise<void> {
         return;
     }
 
-    queue.currentSong = nextSong; // Set the current song
+    queue.currentSong = nextSong;
 
     try {
         queue.playing = true;
@@ -98,11 +111,21 @@ async function playNextSong(guildId: string): Promise<void> {
 function resetQueue(guildId: string): void {
     const queue = getQueue(guildId);
     queue.songs = [];
+    queue.currentSong = null;
     queue.playing = false;
     if (queue.connection) {
         queue.connection.destroy();
         queue.connection = null;
     }
+
+    // Clear the leave timeout if it exists
+    if (queue.leaveTimeout) {
+        clearTimeout(queue.leaveTimeout);
+        queue.leaveTimeout = null;
+        logger.info(`Cleared leave timeout in guild ${guildId}`);
+    }
+
+    queues.delete(guildId); // Remove the queue from the map
     logger.info(`Queue reset in guild ${guildId}`);
 }
 

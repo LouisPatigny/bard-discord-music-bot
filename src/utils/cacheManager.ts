@@ -23,10 +23,6 @@ class CacheManager<T> {
 
         return cached.data;
     }
-
-    delete(key: string): void {
-        this.cache.delete(key);
-    }
 }
 
 export default new CacheManager<any>();
