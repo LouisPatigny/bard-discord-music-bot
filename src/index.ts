@@ -19,6 +19,7 @@ import { Command } from './utils/types';
 const COMMANDS_PATH = path.join(__dirname, 'commands');
 const EVENT_READY = 'ready';
 const EVENT_INTERACTION_CREATE = 'interactionCreate';
+const INTENTS = [IntentsBitField.Flags.Guilds, IntentsBitField.Flags.GuildVoiceStates];
 
 // Extended Client Interface
 interface ExtendedClient extends Client {
@@ -26,17 +27,14 @@ interface ExtendedClient extends Client {
 }
 
 // Client setup
-const client = initializeClient();
+const client = createClient();
 client.commands = new Collection<string, Command>();
-
 const rest = new REST({ version: '10' }).setToken(config.token);
 const commandFiles = fs.readdirSync(COMMANDS_PATH).filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 
 // Initialize Client
-function initializeClient(): ExtendedClient {
-    return new Client({
-        intents: [IntentsBitField.Flags.Guilds, IntentsBitField.Flags.GuildVoiceStates],
-    }) as ExtendedClient;
+function createClient(): ExtendedClient {
+    return new Client({ intents: INTENTS }) as ExtendedClient;
 }
 
 // Load Commands
@@ -66,7 +64,6 @@ async function registerCommands(commands: RESTPostAPIChatInputApplicationCommand
 async function handleCommandInteraction(interaction: ChatInputCommandInteraction) {
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
-
     try {
         await command.execute(interaction);
     } catch (error) {
@@ -80,13 +77,17 @@ async function handleCommandInteraction(interaction: ChatInputCommandInteraction
     }
 }
 
-// Event Listeners
-client.once(EVENT_READY, () => logger.info(`Logged in as ${client.user?.tag}!`));
-client.on(EVENT_INTERACTION_CREATE, async (interaction: Interaction) => {
-    if (interaction.isChatInputCommand()) {
-        await handleCommandInteraction(interaction as ChatInputCommandInteraction);
-    }
-});
+// Add Event Listeners to Client
+function addEventListeners(client: ExtendedClient): void {
+    client.once(EVENT_READY, () => logger.info(`Logged in as ${client.user?.tag}!`));
+    client.on(EVENT_INTERACTION_CREATE, async (interaction: Interaction) => {
+        if (interaction.isChatInputCommand()) {
+            await handleCommandInteraction(interaction as ChatInputCommandInteraction);
+        }
+    });
+}
+
+addEventListeners(client);
 
 // Initialization
 (async () => {
