@@ -30,7 +30,6 @@ ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
 ffmpeg.setFfprobePath('C:/ffmpeg/bin/ffprobe.exe');
 
 const TMP_PATH = path.join(__dirname, '..', 'tmp');
-const TMP_FORMAT = `output_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 const PREFIX = "**";
 const SONG_ADDED = " has been added to the queue!";
 const FETCH_FAIL_MSG = "Failed to retrieve video information.";
@@ -128,6 +127,12 @@ async function handleAudioResource(url: string, songInfo: any, interaction: Chat
         const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 128 * 1024 }); // Increased buffer size
         audioStream.on('error', (error) => {
             logger.error('Error creating audio stream:', error);
+            // Handle the error, e.g., skip to the next song or notify the user
+            audioStream.on('error', async (error) => {
+                logger.error('Error creating audio stream:', error);
+                queueManager.resetQueue(interaction.guildId!);
+                await interaction.followUp({content: AUDIO_STREAM_ERROR_MSG, ephemeral: true});
+            });
         });
 
         // Log stream events for troubleshooting
@@ -171,26 +176,42 @@ async function handleAudioResource(url: string, songInfo: any, interaction: Chat
         } else {
             await interaction.followUp({ content: `${PREFIX}${song.title}${PREFIX}${SONG_ADDED}` });
         }
-    } catch (error) {
-        logger.error(AUDIO_STREAM_ERROR_MSG, error);
+    } catch (error: any) {
+        logger.error('Error in handleAudioResource:', error);
         queueManager.resetQueue(interaction.guildId!);
-        await interaction.followUp({ content: AUDIO_STREAM_ERROR_MSG, ephemeral: true });
+
+        let userMessage = AUDIO_STREAM_ERROR_MSG;
+        if (error.message.includes('Downloaded file does not exist')) {
+            userMessage = 'Failed to download the song. It might be restricted or unavailable.';
+        }
+
+        await interaction.followUp({ content: userMessage, ephemeral: true });
     }
 }
 
 async function downloadAndConvert(videoUrl: string): Promise<string> {
+    const TMP_FORMAT = `output_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const m4aFilePath = path.join(TMP_PATH, `${TMP_FORMAT}.m4a`);
     const mp3FilePath = path.join(TMP_PATH, `${TMP_FORMAT}.mp3`);
 
     await fsPromises.mkdir(TMP_PATH, { recursive: true });
+
     for (let attempt = 0; attempt < config.MAX_RETRIES; attempt++) {
         try {
-            await youtubedl(videoUrl, {
+            const downloadResult = await youtubedl(videoUrl, {
                 extractAudio: true,
                 format: 'bestaudio[ext=m4a]',
                 audioFormat: 'm4a',
                 output: m4aFilePath,
+                noWarnings: true,
+                ageLimit: 0,
             });
+
+            // Verify that the file exists
+            if (!fs.existsSync(m4aFilePath)) {
+                logger.error('Downloaded file does not exist.');
+            }
+
             await new Promise<void>((resolve, reject) => {
                 ffmpeg(m4aFilePath)
                     .audioBitrate(96)
@@ -199,7 +220,9 @@ async function downloadAndConvert(videoUrl: string): Promise<string> {
                     .on('error', (error) => reject(error))
                     .save(mp3FilePath);
             });
+
             await fsPromises.unlink(m4aFilePath).catch(() => {});
+
             return mp3FilePath;
         } catch (error: any) {
             logger.warn(

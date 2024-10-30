@@ -22,7 +22,7 @@ const command: Command = {
 
         const queue = queueManager.getQueue(guildId);
 
-        if (!queue.playing) {
+        if (!queue.playing || !queue.currentSong) {
             await interaction.reply({
                 content: 'No song is currently playing to skip!',
                 ephemeral: true,
@@ -32,9 +32,11 @@ const command: Command = {
 
         try {
             if (queue.songs.length === 0) {
+                // Stop the player and reset the queue
+                queue.player.stop();
                 queueManager.resetQueue(guildId);
                 await interaction.reply({
-                    content: '⏹️ No more songs in the queue. Stopped playback.',
+                    content: '⏹️ Skipped the song and stopped playback. No more songs in the queue.',
                 });
                 logger.info(`Playback stopped in guild ${guildId} by ${interaction.user.tag}`);
             } else {

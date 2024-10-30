@@ -21,6 +21,7 @@ export interface Queue {
     connection: VoiceConnection | null;
     player: AudioPlayer;
     songs: QueueItem[];
+    currentSong: QueueItem | null;
     playing: boolean;
     isBuffering: boolean;
 }

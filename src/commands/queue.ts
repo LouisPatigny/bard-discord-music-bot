@@ -1,3 +1,4 @@
+// src/commands/queue.ts
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import queueManager from '../utils/queueManager';
 import logger from '../utils/logger';
@@ -16,12 +17,11 @@ const command: Command = {
             return;
         }
 
-        // Debug: Log the current queue status
         logger.info(`Fetching queue for guildId: ${guildId}`);
 
         const queue = queueManager.getQueue(guildId);
 
-        if (!queue || queue.songs.length === 0) {
+        if (!queue || (!queue.currentSong && queue.songs.length === 0)) {
             await interaction.reply({
                 content: 'The queue is currently empty!',
                 ephemeral: true,
@@ -30,10 +30,16 @@ const command: Command = {
             return;
         }
 
-        const nowPlaying = queue.songs[0];
-        const upcomingSongs = queue.songs.slice(1, 11);
+        const nowPlaying = queue.currentSong;
+        const upcomingSongs = queue.songs.slice(0, 10);
 
-        let response = `🎶 **Now Playing:** ${nowPlaying.title}\n\n`;
+        let response = '';
+
+        if (nowPlaying) {
+            response += `🎶 **Now Playing:** ${nowPlaying.title}\n\n`;
+        } else {
+            response += 'No song is currently playing.\n\n';
+        }
 
         if (upcomingSongs.length > 0) {
             response += '**Up Next:**\n';
@@ -41,8 +47,8 @@ const command: Command = {
                 .map((song, index) => `${index + 1}. ${song.title}`)
                 .join('\n');
 
-            if (queue.songs.length > 11) {
-                response += `\n...and ${queue.songs.length - 11} more.`;
+            if (queue.songs.length > 10) {
+                response += `\n...and ${queue.songs.length - 10} more.`;
             }
         } else {
             response += 'No more songs in the queue.';

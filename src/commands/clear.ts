@@ -19,7 +19,8 @@ const command: Command = {
 
         const queue = queueManager.getQueue(guildId);
 
-        if (!queue || queue.songs.length === 0) {
+        // Check if both currentSong and queue.songs are empty
+        if (!queue || (!queue.currentSong && queue.songs.length === 0)) {
             await interaction.reply({
                 content: 'The queue is already empty!',
                 ephemeral: true,
@@ -29,7 +30,7 @@ const command: Command = {
 
         try {
             queueManager.resetQueue(guildId);
-            await interaction.reply({ content: '🗑️ Queue cleared!' });
+            await interaction.reply({ content: '🗑️ Queue cleared and playback stopped!' });
             logger.info(`Queue cleared by ${interaction.user.tag} in guild ${guildId}`);
         } catch (error) {
             logger.error('Error clearing queue:', error);

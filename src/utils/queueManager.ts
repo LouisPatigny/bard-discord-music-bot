@@ -17,8 +17,9 @@ function initializeQueue(guildId: string): Queue {
         connection: null,
         player,
         songs: [],
+        currentSong: null,
         playing: false,
-        isBuffering: false, // New flag for buffering state
+        isBuffering: false,
     };
 
     player.on('stateChange', (_, newState) => {
@@ -32,6 +33,7 @@ function initializeQueue(guildId: string): Queue {
                 setTimeout(() => playNextSong(guildId), 500); // Allow a slight delay for smooth transitions
             } else {
                 queue.playing = false;
+                queue.currentSong = null; // Reset currentSong
                 if (queue.connection) {
                     queue.connection.destroy();
                     queue.connection = null;
@@ -66,6 +68,7 @@ async function playNextSong(guildId: string): Promise<void> {
     const queue = getQueue(guildId);
     if (queue.songs.length === 0) {
         queue.playing = false;
+        queue.currentSong = null; // Reset currentSong when the queue is empty
         if (queue.connection) {
             queue.connection.destroy();
             queue.connection = null;
@@ -80,8 +83,10 @@ async function playNextSong(guildId: string): Promise<void> {
         return;
     }
 
+    queue.currentSong = nextSong; // Set the current song
+
     try {
-        queue.playing = true; // Set playing to true before starting
+        queue.playing = true;
         queue.player.play(nextSong.resource);
         logger.info(`Now playing "${nextSong.title}" in guild ${guildId}`);
     } catch (error: any) {
