@@ -22,21 +22,26 @@ import queueManager from '../utils/queueManager';
 import {
     extractVideoId,
     isValidYouTubeUrl,
-    fetchVideoInfo, searchYouTube,
+    fetchVideoInfo,
+    searchYouTube,
 } from '../utils/youtubeUtils';
 
 // Set paths for ffmpeg and ffprobe
 ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
 ffmpeg.setFfprobePath('C:/ffmpeg/bin/ffprobe.exe');
 
+// Constants
 const TMP_PATH = path.join(__dirname, '..', 'tmp');
-const PREFIX = "**";
-const SONG_ADDED = " has been added to the queue!";
-const FETCH_FAIL_MSG = "Failed to retrieve video information.";
-const VOICE_CHANNEL_ERROR_MSG = "You need to be in a voice channel to play music!";
-const INVALID_URL_MSG = "Invalid YouTube URL.";
-const RATE_LIMIT_MSG = "Failed to retrieve video information. Rate limits may apply.";
-const AUDIO_STREAM_ERROR_MSG = "There was an error creating the audio stream.";
+const PREFIX = '**';
+const MESSAGES = {
+    SONG_ADDED: ' has been added to the queue!',
+    FETCH_FAIL: 'Failed to retrieve video information.',
+    VOICE_CHANNEL_ERROR: 'You need to be in a voice channel to play music!',
+    INVALID_URL: 'Invalid YouTube URL.',
+    RATE_LIMIT: 'Failed to retrieve video information. Rate limits may apply.',
+    AUDIO_STREAM_ERROR: 'There was an error creating the audio stream.',
+    PERMISSION_ERROR: 'I need permissions to join and speak in your voice channel!',
+};
 
 const command: Command = {
     data: new SlashCommandBuilder()
@@ -57,89 +62,110 @@ const command: Command = {
 
         await interaction.deferReply();
 
-        let videoId: string | null = null;
-        let songInfo: any = null;
+        const videoId = await getVideoId(input, interaction);
+        if (!videoId) return;
 
-        if (isValidYouTubeUrl(input)) {
-            videoId = extractVideoId(input);
-            if (!videoId) {
-                await interaction.editReply({ content: INVALID_URL_MSG });
-                return;
-            }
-        } else {
-            // Perform a search
-            videoId = await searchYouTube(input);
-            if (!videoId) {
-                await interaction.editReply({ content: `No results found for "${input}".` });
-                return;
-            }
-        }
-
-        songInfo = await getSongInfo(videoId, interaction);
+        const songInfo = await getSongInfo(videoId, interaction);
         if (!songInfo) return;
 
         await handleAudioResource(songInfo.video_url, songInfo, interaction, member);
     },
 };
 
-async function isUserInVoiceChannel(member: GuildMember, interaction: ChatInputCommandInteraction): Promise<boolean> {
-    const voiceChannel = member.voice.channel;
-    if (!voiceChannel) {
-        await interaction.reply({ content: VOICE_CHANNEL_ERROR_MSG, ephemeral: true });
+async function isUserInVoiceChannel(
+    member: GuildMember,
+    interaction: ChatInputCommandInteraction
+): Promise<boolean> {
+    if (!member.voice.channel) {
+        await interaction.reply({ content: MESSAGES.VOICE_CHANNEL_ERROR, ephemeral: true });
         return false;
     }
     return true;
 }
 
-async function userHasPermissions(member: GuildMember, interaction: ChatInputCommandInteraction): Promise<boolean> {
+async function userHasPermissions(
+    member: GuildMember,
+    interaction: ChatInputCommandInteraction
+): Promise<boolean> {
     const voiceChannel = member.voice.channel;
-    if (voiceChannel && !voiceChannel.permissionsFor(interaction.client.user!)?.has(['Connect', 'Speak'])) {
-        await interaction.reply({ content: "I need permissions to join and speak in your voice channel!", ephemeral: true });
+    if (
+        voiceChannel &&
+        !voiceChannel.permissionsFor(interaction.client.user!)?.has(['Connect', 'Speak'])
+    ) {
+        await interaction.reply({ content: MESSAGES.PERMISSION_ERROR, ephemeral: true });
         return false;
     }
     return true;
 }
 
-async function getSongInfo(videoId: string, interaction: ChatInputCommandInteraction) {
+async function getVideoId(
+    input: string,
+    interaction: ChatInputCommandInteraction
+): Promise<string | null> {
+    if (isValidYouTubeUrl(input)) {
+        const videoId = extractVideoId(input);
+        if (!videoId) {
+            await interaction.editReply({ content: MESSAGES.INVALID_URL });
+            return null;
+        }
+        return videoId;
+    } else {
+        const videoId = await searchYouTube(input);
+        if (!videoId) {
+            await interaction.editReply({ content: `No results found for "${input}".` });
+            return null;
+        }
+        return videoId;
+    }
+}
+
+async function getSongInfo(
+    videoId: string,
+    interaction: ChatInputCommandInteraction
+) {
     let songInfo = cacheManager.get(videoId);
 
     if (!songInfo) {
         try {
             songInfo = await fetchVideoInfo(videoId);
             if (!songInfo) {
-                await interaction.followUp({ content: FETCH_FAIL_MSG, ephemeral: true });
+                await interaction.followUp({ content: MESSAGES.FETCH_FAIL, ephemeral: true });
                 return null;
             }
             cacheManager.set(videoId, songInfo);
             logger.info(`Cached video info for: ${songInfo.title}`);
         } catch (error) {
-            logger.error(FETCH_FAIL_MSG, error);
-            await interaction.followUp({ content: RATE_LIMIT_MSG, ephemeral: true });
+            logger.error(MESSAGES.FETCH_FAIL, error);
+            await interaction.followUp({ content: MESSAGES.RATE_LIMIT, ephemeral: true });
             return null;
         }
     }
     return songInfo;
 }
 
-async function handleAudioResource(url: string, songInfo: any, interaction: ChatInputCommandInteraction, member: GuildMember) {
+async function handleAudioResource(
+    url: string,
+    songInfo: any,
+    interaction: ChatInputCommandInteraction,
+    member: GuildMember
+) {
     try {
         const mp3FilePath = await downloadAndConvert(url);
 
         if (!fs.existsSync(mp3FilePath)) {
             logger.error('MP3 file does not exist:', mp3FilePath);
-            await interaction.followUp({ content: "There was an error with the audio file.", ephemeral: true });
+            await interaction.followUp({
+                content: 'There was an error with the audio file.',
+                ephemeral: true,
+            });
             return;
         }
 
-        const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 128 * 1024 }); // Increased buffer size
-        audioStream.on('error', (error) => {
+        const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 128 * 1024 });
+        audioStream.on('error', async (error) => {
             logger.error('Error creating audio stream:', error);
-            // Handle the error, e.g., skip to the next song or notify the user
-            audioStream.on('error', async (error) => {
-                logger.error('Error creating audio stream:', error);
-                queueManager.resetQueue(interaction.guildId!);
-                await interaction.followUp({content: AUDIO_STREAM_ERROR_MSG, ephemeral: true});
-            });
+            queueManager.resetQueue(interaction.guildId!);
+            await interaction.followUp({ content: MESSAGES.AUDIO_STREAM_ERROR, ephemeral: true });
         });
 
         // Log stream events for troubleshooting
@@ -148,7 +174,7 @@ async function handleAudioResource(url: string, songInfo: any, interaction: Chat
 
         const resource = createAudioResource(audioStream, {
             inputType: StreamType.Arbitrary,
-            inlineVolume: true, // Enables inline volume for stability
+            inlineVolume: true,
             metadata: { title: songInfo.title },
         });
 
@@ -165,14 +191,18 @@ async function handleAudioResource(url: string, songInfo: any, interaction: Chat
         if (!queue.playing) {
             const voiceChannel = member.voice.channel;
             if (!voiceChannel) {
-                await interaction.followUp({ content: VOICE_CHANNEL_ERROR_MSG, ephemeral: true });
+                await interaction.followUp({
+                    content: MESSAGES.VOICE_CHANNEL_ERROR,
+                    ephemeral: true,
+                });
                 return;
             }
 
             const connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: guildId,
-                adapterCreator: interaction.guild!.voiceAdapterCreator as DiscordGatewayAdapterCreator,
+                adapterCreator: interaction.guild!
+                    .voiceAdapterCreator as DiscordGatewayAdapterCreator,
             });
 
             queue.connection = connection;
@@ -181,13 +211,15 @@ async function handleAudioResource(url: string, songInfo: any, interaction: Chat
             await queueManager.playNextSong(guildId);
             await interaction.followUp({ content: `Now playing: ${PREFIX}${song.title}${PREFIX}` });
         } else {
-            await interaction.followUp({ content: `${PREFIX}${song.title}${PREFIX}${SONG_ADDED}` });
+            await interaction.followUp({
+                content: `${PREFIX}${song.title}${PREFIX}${MESSAGES.SONG_ADDED}`,
+            });
         }
     } catch (error: any) {
         logger.error('Error in handleAudioResource:', error);
         queueManager.resetQueue(interaction.guildId!);
 
-        let userMessage = AUDIO_STREAM_ERROR_MSG;
+        let userMessage = MESSAGES.AUDIO_STREAM_ERROR;
         if (error.message.includes('Downloaded file does not exist')) {
             userMessage = 'Failed to download the song. It might be restricted or unavailable.';
         }
@@ -233,7 +265,9 @@ async function downloadAndConvert(videoUrl: string): Promise<string> {
             return mp3FilePath;
         } catch (error: any) {
             logger.warn(
-                `Retrying download and convert due to error: ${error.message} (Attempt ${attempt + 1})`
+                `Retrying download and convert due to error: ${error.message} (Attempt ${
+                    attempt + 1
+                })`
             );
             if (attempt >= config.MAX_RETRIES - 1) throw error;
             await new Promise((res) => setTimeout(res, 1000));

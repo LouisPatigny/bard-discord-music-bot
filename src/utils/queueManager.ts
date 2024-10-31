@@ -42,7 +42,7 @@ function handleStateChange(newState: any, guildId: string, queue: Queue): void {
         queue.playing = true;
         queue.isBuffering = false;
     } else if (newState.status === AudioPlayerStatus.Idle) {
-        if (queue.songs.length > 0) {
+        if (queue.playing && queue.songs.length > 0) {
             setTimeout(() => playNextSong(guildId), 500);
         } else {
             stopQueuePlayback(queue, guildId);
@@ -85,16 +85,24 @@ function addSong(guildId: string, song: QueueItem): void {
 
 async function playNextSong(guildId: string): Promise<void> {
     const queue = getQueue(guildId);
+
+    if (!queue.playing) {
+        logger.info(`Queue is not active in guild ${guildId}. Not attempting to play next song.`);
+        return;
+    }
+
     if (queue.songs.length === 0) {
         queue.currentSong = null;
         logger.info(`Queue is empty in guild ${guildId}. No more songs to play.`);
         return;
     }
+
     const nextSong = queue.songs.shift();
     if (!nextSong) {
         logger.error(`No song found in queue for guild ${guildId}`);
         return;
     }
+
     queue.currentSong = nextSong;
     try {
         queue.playing = true;
@@ -111,16 +119,23 @@ function resetQueue(guildId: string): void {
     queue.songs = [];
     queue.currentSong = null;
     queue.playing = false;
-    if (queue.connection) {
-        queue.connection.destroy();
-        queue.connection = null;
+
+    // Stop the current playback
+    if (queue.player) {
+        queue.player.stop(); // This will trigger the stateChange to Idle
+        logger.info(`Stopped current playback in guild ${guildId}`);
     }
+
+    // Clear any existing leave timeout
     if (queue.leaveTimeout) {
         clearTimeout(queue.leaveTimeout);
         queue.leaveTimeout = null;
-        logger.info(`Cleared leave timeout in guild ${guildId}`);
+        logger.info(`Cleared existing leave timeout in guild ${guildId}`);
     }
-    queues.delete(guildId);
+
+    // Start the leave timeout for idle disconnection
+    stopQueuePlayback(queue, guildId);
+
     logger.info(`Queue reset in guild ${guildId}`);
 }
 
