@@ -25,6 +25,10 @@ import {
     fetchVideoInfo,
     searchYouTube,
 } from '../utils/youtubeUtils';
+import { promisify } from 'util';
+
+// Promisify fs.unlink for easier async/await usage
+const unlinkAsync = promisify(fs.unlink);
 
 // Set paths for ffmpeg and ffprobe
 ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
@@ -178,6 +182,16 @@ async function handleAudioResource(
         // Log stream events for troubleshooting
         audioStream.on('end', () => logger.info(`Audio stream ended for ${songInfo.title}`));
         audioStream.on('close', () => logger.info(`Audio stream closed for ${songInfo.title}`));
+
+        // Delete the mp3 file once the stream is closed
+        audioStream.on('close', async () => {
+            try {
+                await unlinkAsync(mp3FilePath);
+                logger.info(`Deleted temporary file: ${mp3FilePath}`);
+            } catch (err) {
+                logger.error(`Failed to delete temporary file: ${mp3FilePath}`, err);
+            }
+        });
 
         const resource = createAudioResource(audioStream, {
             inputType: StreamType.Arbitrary,
