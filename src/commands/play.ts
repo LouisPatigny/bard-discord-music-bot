@@ -162,10 +162,17 @@ async function handleAudioResource(
         }
 
         const audioStream = fs.createReadStream(mp3FilePath, { highWaterMark: 128 * 1024 });
-        audioStream.on('error', async (error) => {
-            logger.error('Error creating audio stream:', error);
-            queueManager.resetQueue(interaction.guildId!);
-            await interaction.followUp({ content: MESSAGES.AUDIO_STREAM_ERROR, ephemeral: true });
+        audioStream.on('error', async (error: Error) => {
+            const errnoError = error as NodeJS.ErrnoException;
+            if (errnoError.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+                // Expected error when the stream is closed prematurely due to queue reset
+                logger.info(`Stream closed prematurely for "${songInfo.title}".`);
+                // No need to reset the queue here as it's already being handled elsewhere
+            } else {
+                logger.error('Error creating audio stream:', error);
+                queueManager.resetQueue(interaction.guildId!);
+                await interaction.followUp({ content: MESSAGES.AUDIO_STREAM_ERROR, ephemeral: true });
+            }
         });
 
         // Log stream events for troubleshooting
