@@ -86,10 +86,12 @@ function addSong(guildId: string, song: QueueItem): void {
 async function playNextSong(guildId: string): Promise<void> {
     const queue = getQueue(guildId);
 
+    /* TO DO: Re-implement when it will no longer stop the bot from playing when joining the channel.
     if (!queue.playing) {
         logger.info(`Queue is not active in guild ${guildId}. Not attempting to play next song.`);
         return;
     }
+    */
 
     if (queue.songs.length === 0) {
         queue.currentSong = null;
