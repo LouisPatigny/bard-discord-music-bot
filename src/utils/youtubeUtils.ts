@@ -1,5 +1,5 @@
 // src/utils/youtubeUtils.ts
-import { google, youtube_v3 } from 'googleapis';
+import { google } from 'googleapis';
 import config from '../config';
 
 const YOUTUBE_API_KEY = config.youtubeApiKey;

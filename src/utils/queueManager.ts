@@ -1,9 +1,7 @@
 // src/utils/queueManager.ts
 import {
-    AudioPlayer,
     AudioPlayerStatus,
     createAudioPlayer,
-    VoiceConnection,
 } from '@discordjs/voice';
 import logger from './logger';
 import { QueueItem, Queue } from './types';
@@ -116,6 +114,17 @@ async function playNextSong(guildId: string): Promise<void> {
     }
 }
 
+function clearQueue(guildId: string): void {
+    const queue = getQueue(guildId);
+    queue.songs = [];
+    if (queue.leaveTimeout) {
+        clearTimeout(queue.leaveTimeout);
+        queue.leaveTimeout = null;
+        logger.info(`Cleared leave timeout in guild ${guildId}`);
+    }
+    logger.info(`Queue cleared for guild ${guildId}`);
+}
+
 function resetQueue(guildId: string): void {
     const queue = getQueue(guildId);
     queue.songs = [];
@@ -150,5 +159,6 @@ export default {
     getQueue,
     addSong,
     playNextSong,
+    clearQueue,
     resetQueue,
 };

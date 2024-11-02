@@ -14,7 +14,7 @@ import path from 'path';
 import config from './config';
 import logger from './utils/logger';
 import { Command } from './utils/types';
-import { loadGuilds, saveGuilds, addGuild, removeGuild } from './utils/guildManager';
+import { loadGuilds, addGuild, removeGuild } from './utils/guildManager';
 
 // Constants
 const COMMANDS_PATH = path.join(__dirname, 'commands');

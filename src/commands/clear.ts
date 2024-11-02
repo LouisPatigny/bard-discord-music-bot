@@ -29,8 +29,8 @@ const command: Command = {
         }
 
         try {
-            queueManager.resetQueue(guildId);
-            await interaction.reply({ content: '🗑️ Queue cleared and playback stopped!' });
+            queueManager.clearQueue(guildId);
+            await interaction.reply({ content: '🗑️ Queue cleared!' });
             logger.info(`Queue cleared by ${interaction.user.tag} in guild ${guildId}`);
         } catch (error) {
             logger.error('Error clearing queue:', error);
